@@ -7,7 +7,8 @@ use anyhow::Result as AResult;
 /// Returns a query depending on examples (bool value)
 fn make_query(examples: bool) -> &'static str {
     match examples {
-	false => r#"
+        false => {
+            r#"
         SELECT ld.posid,ss.definition
         FROM words w
         JOIN senses s ON w.wordid = s.wordid
@@ -16,8 +17,10 @@ fn make_query(examples: bool) -> &'static str {
         WHERE w.word = ?
         GROUP BY ss.synsetid
         ORDER BY ld.posid, s.senseid;
-        "#,
-	true => r#"
+        "#
+        }
+        true => {
+            r#"
         SELECT ld.posid,
                ss.definition,
                GROUP_CONCAT(sm.sample, '; ') as examples
@@ -29,12 +32,13 @@ fn make_query(examples: bool) -> &'static str {
         WHERE w.word = ?
         GROUP BY ss.synsetid
         ORDER BY ld.posid, s.senseid;
-        "#,
+        "#
+        }
     }
 }
 
 /// Display meanings without examples
-pub fn display_meanings(conn: &Connection, word: &str) -> AResult<()> { 
+pub fn display_meanings(conn: &Connection, word: &str) -> AResult<()> {
     // Modified query to include part of speech
     let query = make_query(false);
     let mut stmt = conn.prepare(query)?;
@@ -42,10 +46,10 @@ pub fn display_meanings(conn: &Connection, word: &str) -> AResult<()> {
     println!("\nMeanings of '{}':", word);
 
     let rows = stmt.query_map([word], |row| {
-	Ok((
-	    row.get::<_, String>(0)?,  // pos
-	    row.get::<_, String>(1)?,  // definition
-	))
+        Ok((
+            row.get::<_, String>(0)?, // pos
+            row.get::<_, String>(1)?, // definition
+        ))
     })?;
 
     // Configure text wrapping
@@ -53,9 +57,9 @@ pub fn display_meanings(conn: &Connection, word: &str) -> AResult<()> {
         .initial_indent("      ")
         .subsequent_indent("      ");
 
-    for row in rows { 
+    for row in rows {
         let (pos, definition) = row?;
-        
+
         // Print part of speech and definition
         let pos_symbol = match pos.as_str() {
             "n" => "[n]",
@@ -70,7 +74,7 @@ pub fn display_meanings(conn: &Connection, word: &str) -> AResult<()> {
     Ok(())
 }
 
-pub fn display_meanings_with_examples(conn: &Connection, word: &str) -> AResult<()> { 
+pub fn display_meanings_with_examples(conn: &Connection, word: &str) -> AResult<()> {
     // Modified query to include part of speech
     let query = make_query(true);
     let mut stmt = conn.prepare(query)?;
@@ -78,11 +82,11 @@ pub fn display_meanings_with_examples(conn: &Connection, word: &str) -> AResult<
     println!("\nMeanings of '{}':", word);
 
     let rows = stmt.query_map([word], |row| {
-	Ok((
-	    row.get::<_, String>(0)?,  // pos
-	    row.get::<_, String>(1)?,  // definition
-	    row.get::<_, Option<String>>(2)?,  // examples
-	))
+        Ok((
+            row.get::<_, String>(0)?,         // pos
+            row.get::<_, String>(1)?,         // definition
+            row.get::<_, Option<String>>(2)?, // examples
+        ))
     })?;
 
     // Configure text wrapping
@@ -90,9 +94,9 @@ pub fn display_meanings_with_examples(conn: &Connection, word: &str) -> AResult<
         .initial_indent("      ")
         .subsequent_indent("      ");
 
-    for row in rows { 
+    for row in rows {
         let (pos, definition, examples) = row?;
-        
+
         // Print part of speech and definition
         let pos_symbol = match pos.as_str() {
             "n" => "[n]",
@@ -104,34 +108,33 @@ pub fn display_meanings_with_examples(conn: &Connection, word: &str) -> AResult<
         println!("{} {}", pos_symbol, definition);
 
         // dbg!(Print) examples if they exist
-	/*
-        if let Some(examples_str) = examples {
-            let examples: Vec<&str> = examples_str.split("; ").collect();
-            for example in examples {
-                if !example.is_empty() {
-                    let cleaned_example = example.trim_matches('"');
-                    println!("      \"{}\"", cleaned_example);
+        /*
+            if let Some(examples_str) = examples {
+                let examples: Vec<&str> = examples_str.split("; ").collect();
+                for example in examples {
+                    if !example.is_empty() {
+                        let cleaned_example = example.trim_matches('"');
+                        println!("      \"{}\"", cleaned_example);
+                    }
                 }
             }
+        */
+
+        // dbg!(Print) examples if they exist
+        if let Some(examples_str) = examples {
+            examples_str
+                .split("; ")
+                .filter(|e| !e.is_empty())
+                .map(|e| e.trim_matches('"'))
+                .for_each(|cleaned| println!("      \"{}\"", cleaned));
         }
-	*/
 
-	// dbg!(Print) examples if they exist
-	if let Some(examples_str) = examples {
-	    examples_str
-		.split("; ")
-		.filter(|e| !e.is_empty())
-		.map(|e| e.trim_matches('"'))
-		.for_each(|cleaned| println!("      \"{}\"", cleaned));
-	}
-
-	// Print synonyms if they exist
-	/*
-	if let Some(syns) = synonyms.filter(|s| !s.is_empty()) {
-            println!("      Synonyms: {}", syns);
-	}
-	*/
-	
+        // Print synonyms if they exist
+        /*
+        if let Some(syns) = synonyms.filter(|s| !s.is_empty()) {
+                println!("      Synonyms: {}", syns);
+        }
+        */
     }
 
     Ok(())
